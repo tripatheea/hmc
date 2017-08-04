@@ -8,29 +8,32 @@ import sys
 N_1 = 1
 N_2 = 1
 N = N_1 + N_2
-k = 1
+
 delta_tau = 0.5
 n_tau = 2
 sigma = 2.
 
 
+
 # Change this.
-n_iterations = 1000000
+n_iterations = 50000
 
 debug = False
 
-def calculate_force(x_s, gaussian_weight=0.5):
+def calculate_force(x_s, gaussian_weight):
     forces = [0.0] * N
 
+    
+
     for i in range(N):
-        forces[i] = - ( forces[i] + 0.5 * np.tanh(0.5 * x_s[i]) )
+        forces[i] = - ( forces[i] + gaussian_weight * np.tanh(0.5 * x_s[i]) )
 
     return forces
 
-def calculate_hamiltonian(x_s, p_s, gaussian_weight=0.5):
+def calculate_hamiltonian(x_s, p_s, gaussian_weight):
     # The Hamiltonian is the sum of the kinetic term, the potential term and each of the individual interaction terms.
     
-    reg_vander = 0.00000001
+    reg_vander = 0.0
     # Compute the kinetic term first: 1/2 p^2
 
     kinetic_contribution = 0.
@@ -64,12 +67,15 @@ def calculate_hamiltonian(x_s, p_s, gaussian_weight=0.5):
 
 def tests():
     x_s = [0.5, 0.6]
-    forces = calculate_force(x_s, gaussian_weight=1.)
+    forces = calculate_force(x_s)
 
     print "The force for x = ", x_s[0], " is ", forces
 
 
-def hmc(tau=1, x_s={}, p_s={}):
+def hmc(k=1):
+    
+    gaussian_weight = 0.5 / k
+
 
     x_s = {}
     p_s = {}
@@ -114,7 +120,7 @@ def hmc(tau=1, x_s={}, p_s={}):
         rand_2 = np.random.random()
         p_s[N - 1] = np.sqrt( - 2. * np.log(rand_1) ) * np.cos(np.pi * rand_2)
 
-        forces = calculate_force(x_s)
+        forces = calculate_force(x_s, gaussian_weight)
 
         # print "\nThe forces are ", forces[0], forces[1]
         
@@ -129,7 +135,7 @@ def hmc(tau=1, x_s={}, p_s={}):
 
         for tau in range(1, n_tau):
             
-            forces = calculate_force(x_2_s)
+            forces = calculate_force(x_2_s, gaussian_weight)
             
             for i in range(N):
                 p_2_s[i] = p_2_s[i] + delta_tau * forces[i]
@@ -137,7 +143,7 @@ def hmc(tau=1, x_s={}, p_s={}):
             for i in range(N):
                 x_2_s[i] = x_2_s[i] + delta_tau * p_2_s[i]
 
-        forces = calculate_force(x_2_s)
+        forces = calculate_force(x_2_s, gaussian_weight)
 
         for i in range(N):
             p_2_s[i] = p_2_s[i] + (delta_tau / 2) * forces[i]
@@ -147,8 +153,8 @@ def hmc(tau=1, x_s={}, p_s={}):
             print "The new p_s are ", p_2_s[0], p_2_s[1]
 
 
-        hamiltonian = calculate_hamiltonian(x_s, p_s)
-        new_hamiltonian = calculate_hamiltonian(x_2_s, p_2_s)
+        hamiltonian = calculate_hamiltonian(x_s, p_s, gaussian_weight)
+        new_hamiltonian = calculate_hamiltonian(x_2_s, p_2_s, gaussian_weight)
 
         delta_hamiltonian = new_hamiltonian - hamiltonian
 
@@ -188,7 +194,7 @@ def hmc(tau=1, x_s={}, p_s={}):
                 
                 # print "i, j", x_s[i], x_s[j]
 
-                ratio_value = ratio_value * np.tanh(0.5 * (x_s[i] - x_s[j]))
+                ratio_value = ratio_value * np.tanh(gaussian_weight * (x_s[i] - x_s[j]))
         
         ratio_value = ratio_value * ratio_value
 
@@ -213,8 +219,9 @@ def hmc(tau=1, x_s={}, p_s={}):
 
     # plt.show()
 
-    print n_iterations, total_value / n_iterations
-
+    print k, total_value / n_iterations
+    
+    return total_value / n_iterations
 
         
 
@@ -238,7 +245,39 @@ def weird_distribution():
     plt.show()
     
 
-if __name__ == '__main__':
-    hmc()
 
-    # tests()
+def plot_free_energy_against_k():
+
+    # k_s = [i for i in range(1, 20)]
+    
+    # Z_s = []
+    # F_s = []
+    # for k in k_s:
+    #     z = (1 / (16 * k * k * 2)) * hmc(k)
+        
+    #     F = np.log(z)
+
+    #     Z_s.append(z)
+    #     F_s.append(F)
+
+    k_s = [1, 2]
+    F_s = [-3.9013733305120364, -5.7441293057119784]
+
+    plt.plot(k_s, F_s, lw=0, marker="*", ms=10, color="red", label="Monte Carlo")
+
+    plt.xlim(0, 21)
+    
+    plt.xlabel("k")
+    plt.ylabel("F(2, k)")
+
+    plt.legend()
+
+    plt.savefig("plot.pdf")
+
+
+
+
+if __name__ == '__main__':
+    # hmc()
+
+    plot_free_energy_against_k()
