@@ -2,13 +2,17 @@ from __future__ import division
 
 import matplotlib.pyplot as plt
 import numpy as np
+import sys
+
 
 N_1 = 1
 N_2 = 1
 N = N_1 + N_2
 k = 1
-delta_T = 0.5
-total_steps = 6
+delta_tau = 0.5
+n_tau = 2
+n_iterations = 300
+
 
 
 def calculate_force(x_s, gaussian_weight=0.5):
@@ -22,7 +26,7 @@ def calculate_force(x_s, gaussian_weight=0.5):
 def calculate_hamiltonian(x_s, p_s, gaussian_weight=0.5):
     # The Hamiltonian is the sum of the kinetic term, the potential term and each of the individual interaction terms.
     
-
+    reg_vander = 0.00000001
     # Compute the kinetic term first: 1/2 p^2
 
     kinetic_contribution = 0.
@@ -39,13 +43,13 @@ def calculate_hamiltonian(x_s, p_s, gaussian_weight=0.5):
     potential = 0.
     for i in range(N_1):
         for j in range(i + 1, N_1):
-            potential -= np.log(abs(np.tanh(gaussian_weight * (x_s[i] - x_s[j]))))
+            potential -= np.log(abs(np.tanh(gaussian_weight * (x_s[i] - x_s[j]))) + reg_vander )
 
     for i in range(N_1 + 1, N):
         for j in range(i + 1, N):
-            potential -= np.log(abs(np.tanh(gaussian_weight * (x_s[i] - x_s[j]))))
+            potential -= np.log(abs(np.tanh(gaussian_weight * (x_s[i] - x_s[j]))) + reg_vander)
 
-    potential *= 2.
+    potential = potential * 2.
     
     action = action + potential
 
@@ -61,7 +65,7 @@ def tests():
     print "The force for x = ", x_s[0], " is ", forces
 
 
-def hmc(n_step=1, x_s={}, p_s={}):
+def hmc(tau=1, x_s={}, p_s={}):
 
     # First, choose a position freely.
     x_s = {}
@@ -76,29 +80,35 @@ def hmc(n_step=1, x_s={}, p_s={}):
         # x_s[i] = np.random.random() - 0.5  
         # x_s[i + 1] = np.random.random() - 0.5
 
+        # print "setting position, i = ", i
+
         x_s[i] = 0.5  
         x_s[i + 1] = 0.6
 
 
-    # Next, generate canonical momentum.
-    # Sample this from a Gaussian distribution: e^( - p^2 / 2)
-    mu, sigma = 0, 1 / np.sqrt(2) # mean and standard deviation
+    
 
-    for i in xrange(0, N - 1, 2):
-        # Scale by sqrt(pi) to make the coefficient 1.
-        # p_s[i] = np.sqrt(np.pi) * np.random.normal(loc=0.0, scale=sigma)
-        # p_s[i + 1] = np.sqrt(np.pi) * np.random.normal(loc=0.0, scale=sigma)
-        p_s[i] = 0.1
-        p_s[i + 1] = 0.2
-
+    print "\n\n"
 
     all_x_s, all_p_s = [], []
     
     ratio_values = []
 
-    while n_step < total_steps:
+    for iter in range(n_iterations):
+        
 
-        # print "Step #{}".format(n_step)
+        # Next, generate canonical momentum.
+        # Sample this from a Gaussian distribution: e^( - p^2 / 2)
+        mu, sigma = 0, 1 / np.sqrt(2) # mean and standard deviation
+
+        for i in xrange(0, N - 1, 2):
+            # Scale by sqrt(pi) to make the coefficient 1.
+            # p_s[i] = np.sqrt(np.pi) * np.random.normal(loc=0.0, scale=sigma)
+            # p_s[i + 1] = np.sqrt(np.pi) * np.random.normal(loc=0.0, scale=sigma)
+            p_s[i] = 0.1
+            p_s[i + 1] = 0.2
+
+        # print "Step #{}".format(tau)
         # Next, using the molecular dynamics, to find the state in t = n + 1.
 
         # The molecular dynamics comes from Hamilton-Jacobi equations.
@@ -108,33 +118,59 @@ def hmc(n_step=1, x_s={}, p_s={}):
         forces = calculate_force(x_s)
 
 
-
+        print "\nThe forces are ", forces[0], forces[1]
         
         # Now, use the leapfrog method to propagate the system.
-        # p_2_s = {}
-        # for i in range(N):
-        #     p_2_s[i] = p_s[i] + (delta_T / 2) * forces[i]
-
-        p_2_s = {}              # p_2_s = p(t + delta_T / 2)
+        p_2_s = {}
         for i in range(N):
-            print "The forces for x = ", x_s[i], "are", forces
+            p_2_s[i] = p_s[i] + (delta_tau / 2) * forces[i]
+            # print "The forces for x = ", x_s[i], "are", forces
 
-            p_2_s[i] = p_s[i] - (delta_T / 2) * x_s[i]
 
-        x_3_s = {}              # x_3_s = x(t + delta_T)
+        x_2_s = {}
         for i in range(N):
-            x_3_s[i] = x_s[i] + delta_T * p_2_s[i]
+            x_2_s[i] = x_s[i] + delta_tau * p_2_s[i]
 
-        p_3_s = {}
+
+        for tau in range(n_tau):
+            forces = calculate_force(x_2_s)
+            
+
+            # Now, use the leapfrog method to propagate the system.
+            for i in range(N):
+                p_2_s[i] = p_2_s[i] + delta_tau * forces[i]
+                # print "The forces for x = ", x_s[i], "are", forces
+
+            for i in range(N):
+                x_2_s[i] = x_2_s[i] + delta_tau * p_2_s[i]
+
+            
+
+
+        forces = calculate_force(x_2_s)
+
         for i in range(N):
-            p_3_s[i] = p_2_s[i] - (delta_T / 2) * x_3_s[i]
+            p_2_s[i] = p_2_s[i] + (delta_tau / 2) * forces[i]
+            # print "The forces for x = ", x_s[i], "are", forces
+
+
+        print "The new p's are: ", p_2_s[0], p_2_s[1]
+
+        print "The new x's are: ", x_2_s[0], x_2_s[1]
+        
 
         hamiltonian = calculate_hamiltonian(x_s, p_s)
-        new_hamiltonian = calculate_hamiltonian(x_3_s, p_3_s)
+        new_hamiltonian = calculate_hamiltonian(x_2_s, p_2_s)
 
-        delta_hamiltonian = new_hamiltonian - hamiltonian - 2.5
+        delta_hamiltonian = new_hamiltonian - hamiltonian
 
-        
+        print "Old Hamiltonian = ", hamiltonian
+        print "New Hamiltonian = ", new_hamiltonian
+        print "delta Hamiltonian = ", delta_hamiltonian
+
+        # print "The old Hamiltonian is", hamiltonian
+        # print "The new Hamiltonian is", new_hamiltonian
+
         if float(delta_hamiltonian) < float(0.):
             transition_probability = 1.
         else:
@@ -142,39 +178,50 @@ def hmc(n_step=1, x_s={}, p_s={}):
 
 
         # Generate a new random number between 0 and 1 and if it is less than the transition probability, accept the new state.
-        some_random_number = np.random.rand()
+        # some_random_number = np.random.rand()
+        some_random_number = 0.5
 
         if some_random_number <= transition_probability:
             # print "Transition to new state"
-            new_x_s = x_3_s
-            new_p_s = p_3_s
+            x_s = x_2_s
+            # p_s = p_2_s
         else:
             # print "Stick with the current state"
-            new_x_s = x_s
-            new_p_s = p_s
+            # new_x_s = x_s
+            # new_p_s = p_s
+            pass
 
-        # Calculate the raito of free energy.
+        # Calculate the ratio of free energy.
         ratio_value = 1.
         for i in range(N_1):
-            for j in range(N_1, N):
-                ratio_value *= np.tanh(new_x_s[i] - new_x_s[j]) ** 2
+            # print "Hey i=", i
+            for j in range(N_1, N ):
+                # print "Hello j=", j
+                
+                # print "i, j", x_s[i], x_s[j]
+
+                ratio_value = ratio_value * np.tanh(0.5 * (x_s[i] - x_s[j]))
         
+        ratio_value = ratio_value * ratio_value
 
         ratio_values.append( ratio_value )
 
-        # hmc(n_step=(n_step + 1), x_s=new_x_s, p_s=new_p_s)
-        x_s, p_s = new_x_s, new_p_s
-
+        # hmc(tau=(tau + 1), x_s=new_x_s, p_s=new_p_s)
+        
         all_x_s.append( x_s )
         all_p_s.append( p_s )
-        n_step += 1
+        
 
 
-    # print ratio_values
-    # print [i for i in range(len(ratio_values))]
-    # plt.plot([i for i in range(len(ratio_values))], ratio_values)
+    # print "ratio values", ratio_values
+    for i in range(len(ratio_values)):
+        print ratio_values[i]
+        
+        pass
 
-    # plt.show()
+    plt.plot([i for i in range(len(ratio_values))], ratio_values)
+
+    plt.show()
 
 
         
