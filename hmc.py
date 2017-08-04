@@ -11,9 +11,13 @@ N = N_1 + N_2
 k = 1
 delta_tau = 0.5
 n_tau = 2
-n_iterations = 300
+sigma = 2.
 
 
+# Change this.
+n_iterations = 1000000
+
+debug = False
 
 def calculate_force(x_s, gaussian_weight=0.5):
     forces = [0.0] * N
@@ -67,109 +71,91 @@ def tests():
 
 def hmc(tau=1, x_s={}, p_s={}):
 
-    # First, choose a position freely.
     x_s = {}
     p_s = {}
 
-    # Generate initial configuration.
-
-    # Generate positions first.
 
     for i in xrange(0, N - 1, 2):
-        # Generate a random number in the range- [0.5, 0.5)
-        # x_s[i] = np.random.random() - 0.5  
-        # x_s[i + 1] = np.random.random() - 0.5
+        rand_1 = np.random.random()
+        rand_2 = np.random.random()
 
-        # print "setting position, i = ", i
+        x_s[i] = np.sqrt( - 2. * sigma * np.log(rand_1)) * np.cos( np.pi * rand_2)
+        x_s[i + 1] = np.sqrt( - 2. * sigma * np.log(rand_1)) * np.sin( np.pi * rand_2)
 
-        x_s[i] = 0.5  
-        x_s[i + 1] = 0.6
+        # x_s[i] = 0.5  
+        # x_s[i + 1] = 0.6
+
+    rand_1 = np.random.random()
+    rand_2 = np.random.random()
+    x_s[N - 1] = np.sqrt( - 2. * sigma * np.log(rand_1) ) * np.cos(np.pi * rand_2)
 
 
-    
+    total_value = 0.
 
-    print "\n\n"
-
-    all_x_s, all_p_s = [], []
-    
+    all_x_s, all_p_s = [], []    
     ratio_values = []
+    for iter in range(1, n_iterations + 1):
 
-    for iter in range(n_iterations):
-        
-
-        # Next, generate canonical momentum.
-        # Sample this from a Gaussian distribution: e^( - p^2 / 2)
-        mu, sigma = 0, 1 / np.sqrt(2) # mean and standard deviation
+        if debug:
+            print "\n"
 
         for i in xrange(0, N - 1, 2):
-            # Scale by sqrt(pi) to make the coefficient 1.
-            # p_s[i] = np.sqrt(np.pi) * np.random.normal(loc=0.0, scale=sigma)
-            # p_s[i + 1] = np.sqrt(np.pi) * np.random.normal(loc=0.0, scale=sigma)
-            p_s[i] = 0.1
-            p_s[i + 1] = 0.2
+            
+            rand_1 = np.random.random()
+            rand_2 = np.random.random()
 
-        # print "Step #{}".format(tau)
-        # Next, using the molecular dynamics, to find the state in t = n + 1.
+            p_s[i] = np.sqrt( - 2. * np.log(rand_1)) * np.cos( np.pi * rand_2)
+            p_s[i + 1] = np.sqrt( - 2. * np.log(rand_1)) * np.sin( np.pi * rand_2)
 
-        # The molecular dynamics comes from Hamilton-Jacobi equations.
-        # dx/dt = p and dp/dt = - \frac{ \partial S(x) }{ \partial x }
+            # p_s[i] = 0.1
+            # p_s[i + 1] = 0.2
+        
+        rand_1 = np.random.random()
+        rand_2 = np.random.random()
+        p_s[N - 1] = np.sqrt( - 2. * np.log(rand_1) ) * np.cos(np.pi * rand_2)
 
-        # So we need to find the force.
         forces = calculate_force(x_s)
 
-
-        print "\nThe forces are ", forces[0], forces[1]
+        # print "\nThe forces are ", forces[0], forces[1]
         
-        # Now, use the leapfrog method to propagate the system.
+        
         p_2_s = {}
         for i in range(N):
             p_2_s[i] = p_s[i] + (delta_tau / 2) * forces[i]
-            # print "The forces for x = ", x_s[i], "are", forces
-
-
+        
         x_2_s = {}
         for i in range(N):
             x_2_s[i] = x_s[i] + delta_tau * p_2_s[i]
 
-
-        for tau in range(n_tau):
+        for tau in range(1, n_tau):
+            
             forces = calculate_force(x_2_s)
             
-
-            # Now, use the leapfrog method to propagate the system.
             for i in range(N):
                 p_2_s[i] = p_2_s[i] + delta_tau * forces[i]
-                # print "The forces for x = ", x_s[i], "are", forces
-
+            
             for i in range(N):
                 x_2_s[i] = x_2_s[i] + delta_tau * p_2_s[i]
-
-            
-
 
         forces = calculate_force(x_2_s)
 
         for i in range(N):
             p_2_s[i] = p_2_s[i] + (delta_tau / 2) * forces[i]
-            # print "The forces for x = ", x_s[i], "are", forces
-
-
-        print "The new p's are: ", p_2_s[0], p_2_s[1]
-
-        print "The new x's are: ", x_2_s[0], x_2_s[1]
         
+        if debug:
+            print "The new x_s are ", x_2_s[0], x_2_s[1]
+            print "The new p_s are ", p_2_s[0], p_2_s[1]
+
 
         hamiltonian = calculate_hamiltonian(x_s, p_s)
         new_hamiltonian = calculate_hamiltonian(x_2_s, p_2_s)
 
         delta_hamiltonian = new_hamiltonian - hamiltonian
 
-        print "Old Hamiltonian = ", hamiltonian
-        print "New Hamiltonian = ", new_hamiltonian
-        print "delta Hamiltonian = ", delta_hamiltonian
-
-        # print "The old Hamiltonian is", hamiltonian
-        # print "The new Hamiltonian is", new_hamiltonian
+        if debug:
+            print "Old Hamiltonian = ", hamiltonian
+            print "New Hamiltonian = ", new_hamiltonian
+        # print "delta Hamiltonian = ", delta_hamiltonian
 
         if float(delta_hamiltonian) < float(0.):
             transition_probability = 1.
@@ -177,9 +163,11 @@ def hmc(tau=1, x_s={}, p_s={}):
             transition_probability = np.exp( - delta_hamiltonian)
 
 
-        # Generate a new random number between 0 and 1 and if it is less than the transition probability, accept the new state.
-        # some_random_number = np.random.rand()
-        some_random_number = 0.5
+       
+        some_random_number = np.random.rand()
+        # some_random_number = 0.5
+
+
 
         if some_random_number <= transition_probability:
             # print "Transition to new state"
@@ -204,6 +192,8 @@ def hmc(tau=1, x_s={}, p_s={}):
         
         ratio_value = ratio_value * ratio_value
 
+        total_value += ratio_value
+
         ratio_values.append( ratio_value )
 
         # hmc(tau=(tau + 1), x_s=new_x_s, p_s=new_p_s)
@@ -215,13 +205,15 @@ def hmc(tau=1, x_s={}, p_s={}):
 
     # print "ratio values", ratio_values
     for i in range(len(ratio_values)):
-        print ratio_values[i]
+        # print ratio_values[i] 
         
         pass
 
-    plt.plot([i for i in range(len(ratio_values))], ratio_values)
+    # plt.plot([i for i in range(len(ratio_values))], ratio_values)
 
-    plt.show()
+    # plt.show()
+
+    print n_iterations, total_value / n_iterations
 
 
         
